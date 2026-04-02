@@ -1,0 +1,8 @@
+node_modules/
+.wwebjs_auth/
+.wwebjs_cache/
+*.jpg
+!Background.jpg
+*.png
+!TestPerson.png
+temp_wish_*.jpg

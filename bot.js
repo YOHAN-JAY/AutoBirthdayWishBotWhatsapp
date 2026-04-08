@@ -189,31 +189,43 @@ client.on('message_create', async (msg) => {
         const senderId = msg.author || msg.from;
         const isBotOwner = msg.fromMe || senderId === myChatId;
         
-        let isMainGroupAdmin = false;
-        try {
-            const mainGroup = await client.getChatById(allowedGroupId);
-            const participant = mainGroup.participants.find(p => p.id._serialized === senderId);
-            if (participant && (participant.isAdmin || participant.isSuperAdmin)) {
-                isMainGroupAdmin = true;
+        let isLocalGroupAdmin = false;
+        if (chat.isGroup) {
+            const localParticipant = chat.participants.find(p => p.id._serialized === senderId);
+            if (localParticipant && (localParticipant.isAdmin || localParticipant.isSuperAdmin)) {
+                isLocalGroupAdmin = true;
             }
-        } catch (e) {
-            console.error('Could not verify main group admin status', e);
+        }
+        
+        let isMainGroupAdmin = false;
+        if (!isLocalGroupAdmin) {
+            try {
+                const mainGroup = await client.getChatById(allowedGroupId);
+                const participant = mainGroup.participants.find(p => p.id._serialized === senderId);
+                if (participant && (participant.isAdmin || participant.isSuperAdmin)) {
+                    isMainGroupAdmin = true;
+                }
+            } catch (e) {
+                console.error('Could not verify main group admin status', e);
+            }
         }
 
         // --- Custom Permissions DB Fallback ---
         let isCustomAllowed = false;
-        try {
-            const permsPath = path.join(__dirname, 'permissions.json');
-            if (fs.existsSync(permsPath)) {
-                const arr = JSON.parse(fs.readFileSync(permsPath, 'utf-8'));
-                const senderNum = senderId.split('@')[0];
-                if (arr.some(num => num.replace(/[^0-9]/g, '') === senderNum)) {
-                    isCustomAllowed = true;
+        if (!isLocalGroupAdmin && !isMainGroupAdmin) {
+            try {
+                const permsPath = path.join(__dirname, 'permissions.json');
+                if (fs.existsSync(permsPath)) {
+                    const arr = JSON.parse(fs.readFileSync(permsPath, 'utf-8'));
+                    const senderNum = senderId.split('@')[0];
+                    if (arr.some(num => num.replace(/[^0-9]/g, '') === senderNum)) {
+                        isCustomAllowed = true;
+                    }
                 }
-            }
-        } catch(e) {}
+            } catch(e) {}
+        }
 
-        if (!isBotOwner && !isMainGroupAdmin && !isCustomAllowed) {
+        if (!isBotOwner && !isLocalGroupAdmin && !isMainGroupAdmin && !isCustomAllowed) {
             return msg.reply('❌ Sorry, you do not have permission to use the `/quiz` command!');
         }
 
@@ -361,31 +373,43 @@ client.on('message_create', async (msg) => {
         const senderId = msg.author || msg.from;
         const isBotOwner = msg.fromMe || senderId === myChatId;
         
-        let isMainGroupAdmin = false;
-        try {
-            const mainGroup = await client.getChatById(allowedGroupId);
-            const participant = mainGroup.participants.find(p => p.id._serialized === senderId);
-            if (participant && (participant.isAdmin || participant.isSuperAdmin)) {
-                isMainGroupAdmin = true;
+        let isLocalGroupAdmin = false;
+        if (chat.isGroup) {
+            const localParticipant = chat.participants.find(p => p.id._serialized === senderId);
+            if (localParticipant && (localParticipant.isAdmin || localParticipant.isSuperAdmin)) {
+                isLocalGroupAdmin = true;
             }
-        } catch (e) {
-            console.error('Could not verify main group admin status', e);
+        }
+
+        let isMainGroupAdmin = false;
+        if (!isLocalGroupAdmin) {
+            try {
+                const mainGroup = await client.getChatById(allowedGroupId);
+                const participant = mainGroup.participants.find(p => p.id._serialized === senderId);
+                if (participant && (participant.isAdmin || participant.isSuperAdmin)) {
+                    isMainGroupAdmin = true;
+                }
+            } catch (e) {
+                console.error('Could not verify main group admin status', e);
+            }
         }
 
         // --- Custom Permissions DB Fallback ---
         let isCustomAllowed = false;
-        try {
-            const permsPath = path.join(__dirname, 'permissions.json');
-            if (fs.existsSync(permsPath)) {
-                const arr = JSON.parse(fs.readFileSync(permsPath, 'utf-8'));
-                const senderNum = senderId.split('@')[0];
-                if (arr.some(num => num.replace(/[^0-9]/g, '') === senderNum)) {
-                    isCustomAllowed = true;
+        if (!isLocalGroupAdmin && !isMainGroupAdmin) {
+            try {
+                const permsPath = path.join(__dirname, 'permissions.json');
+                if (fs.existsSync(permsPath)) {
+                    const arr = JSON.parse(fs.readFileSync(permsPath, 'utf-8'));
+                    const senderNum = senderId.split('@')[0];
+                    if (arr.some(num => num.replace(/[^0-9]/g, '') === senderNum)) {
+                        isCustomAllowed = true;
+                    }
                 }
-            }
-        } catch(e) {}
+            } catch(e) {}
+        }
 
-        if (!isBotOwner && !isMainGroupAdmin && !isCustomAllowed) {
+        if (!isBotOwner && !isLocalGroupAdmin && !isMainGroupAdmin && !isCustomAllowed) {
             return msg.reply('❌ Sorry, you do not have permission to use the `/wish` command!');
         }
         // ---------------------------------------

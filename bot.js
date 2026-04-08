@@ -1,4 +1,4 @@
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const { Client, LocalAuth, MessageMedia, Poll } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
@@ -90,6 +90,22 @@ client.on('ready', async () => {
     // -----------------------------------------
 });
 
+// --- global state for Quiz ---
+let activeQuiz = null;
+
+client.on('vote_update', async (vote) => {
+    if (!activeQuiz || !vote.parentMessage || activeQuiz.messageId !== vote.parentMessage.id._serialized) return;
+    
+    if (activeQuiz.firstCorrectVoter) return;
+
+    const selectedOptions = vote.selectedOptions || [];
+    const isCorrect = selectedOptions.some(opt => opt.name === activeQuiz.correctAnswerText);
+
+    if (isCorrect) {
+        activeQuiz.firstCorrectVoter = vote.voter;
+    }
+});
+
 // Event: Message Handler (Listens to both incoming messages and messages you send yourself)
 client.on('message_create', async (msg) => {
     // We only care about messages that contain the /wish command
@@ -161,6 +177,156 @@ client.on('message_create', async (msg) => {
         replyText += `*Node.js:* ${process.version}`;
 
         return msg.reply(replyText.trim());
+    }
+    // ---------------------------------
+
+    // --- Command: Create a Quiz ---
+    if (content.toLowerCase().startsWith('/quiz ') || content.toLowerCase().startsWith('/poll ')) {
+        const chat = await msg.getChat();
+        const allowedGroupId = '120363388371926819@g.us';
+        const myChatId = client.info.wid._serialized;
+
+        if (chat.id._serialized !== allowedGroupId && chat.id._serialized !== myChatId) {
+            return msg.reply('❌ The `/quiz` command is not allowed in this chat!');
+        }
+
+        if (chat.isGroup) {
+            const senderId = msg.author || msg.from;
+            const participant = chat.participants.find(p => p.id._serialized === senderId);
+            const isBotOwner = msg.fromMe;
+            const isAdmin = participant && (participant.isAdmin || participant.isSuperAdmin);
+
+            if (!isBotOwner && !isAdmin) {
+                return msg.reply('❌ Sorry, only group admins can use the `/quiz` command!');
+            }
+        }
+
+        if (activeQuiz) {
+            return msg.reply('❌ A quiz is already running right now! Please wait.');
+        }
+
+        const lines = msg.body.trim().split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        let commandText = lines[0].replace(/^\/(quiz|poll)\s+/i, '');
+        let timerSeconds = 30;
+        let question = commandText;
+
+        const timeMatch = commandText.match(/^(\d+)\s+(.*)/);
+        if (timeMatch) {
+            timerSeconds = parseInt(timeMatch[1], 10);
+            question = timeMatch[2];
+        }
+
+        if (!question || lines.length < 3) {
+            return msg.reply('❌ Invalid format! Please use:\n/quiz [seconds] Question\nOption 1\n*Correct Option');
+        }
+
+        if (timerSeconds > 300) {
+            return msg.reply('❌ Please set a time limit of 300 seconds (5 minutes) or less.');
+        } else if (timerSeconds < 10) {
+            return msg.reply('❌ Please set a time limit of at least 10 seconds.');
+        }
+
+        let correctAnswerText = null;
+        const options = lines.slice(1).map(opt => {
+            if (opt.startsWith('*')) {
+                const cleanOpt = opt.substring(1).trim();
+                correctAnswerText = cleanOpt;
+                return cleanOpt;
+            }
+            return opt;
+        });
+
+        if (!correctAnswerText) {
+             return msg.reply('❌ Please mark the correct answer with an asterisk (*). Example:\n*Option 1');
+        }
+
+        if (options.length > 12) {
+             return msg.reply('❌ WhatsApp supports a maximum of 12 options in a poll/quiz.');
+        }
+
+        try {
+            const poll = new Poll(question, options);
+            const pollMsg = await client.sendMessage(allowedGroupId, poll);
+            
+            if (chat.id._serialized === myChatId) {
+                await msg.reply('✅ Quiz successfully sent to the group!');
+            }
+
+            // Start Quiz State
+            activeQuiz = {
+                messageId: pollMsg.id._serialized,
+                correctAnswerText: correctAnswerText,
+                firstCorrectVoter: null
+            };
+
+            // Setup timer
+            let secondsLeft = timerSeconds;
+            const numberEmojis = ['0️⃣','1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'];
+            
+            let countdownMsg = null;
+            try {
+                countdownMsg = await client.sendMessage(allowedGroupId, `⏳ Countdown: ${secondsLeft}s left`);
+            } catch (e) {}
+
+            const timer = setInterval(async () => {
+                secondsLeft--;
+
+                if (countdownMsg && typeof countdownMsg.edit === 'function') {
+                    try {
+                        await countdownMsg.edit(`⏳ Countdown: ${secondsLeft}s left`);
+                    } catch (e) {}
+                }
+
+                if (secondsLeft <= 10 && secondsLeft > 0) {
+                    try {
+                        await pollMsg.react(numberEmojis[secondsLeft]);
+                    } catch (e) {
+                         // ignore reaction errors
+                    }
+                }
+
+                if (secondsLeft === 0) {
+                    clearInterval(timer);
+
+                    if (countdownMsg) {
+                        try {
+                            await countdownMsg.delete(true);
+                        } catch (e) {}
+                    }
+
+                    // Try to delete the poll for everyone
+                    try {
+                        let targetPollMsg = pollMsg;
+                        try {
+                            const messages = await chat.fetchMessages({ limit: 10 });
+                            const fetchedPoll = messages.find(m => m.id._serialized === pollMsg.id._serialized);
+                            if (fetchedPoll) targetPollMsg = fetchedPoll;
+                        } catch (err) {}
+                        
+                        await targetPollMsg.delete(true);
+                    } catch (e) {
+                        console.error('Failed to delete poll message:', e);
+                    }
+
+                    const winnerText = activeQuiz.firstCorrectVoter ? `@${activeQuiz.firstCorrectVoter.split('@')[0]} answered it correctly first!` : `Nobody got it right this time! 😢`;
+                    
+                    const resultText = `⏳ *Time's Up!*\n\n_${question}_\n\nThe correct answer is: *${activeQuiz.correctAnswerText}*\n\n🎉 ${winnerText}`;
+                    
+                    const mentions = activeQuiz.firstCorrectVoter ? [activeQuiz.firstCorrectVoter] : [];
+                    
+                    try {
+                        await client.sendMessage(allowedGroupId, resultText, { mentions });
+                    } catch(e) { }
+
+                    activeQuiz = null; // Clear state
+                }
+            }, 1000);
+
+        } catch (err) {
+            console.error('Failed to send quiz:', err);
+            await msg.reply('❌ Failed to create the quiz. Double check your format.');
+            activeQuiz = null;
+        }
     }
     // ---------------------------------
 
@@ -249,5 +415,8 @@ Here’s to another year of incredible achievements and memorable moments. 🎊�
 });
 
 // Start the client
+const { startWebServer } = require('./webServer');
+startWebServer(client);
+
 console.log('Initializing WhatsApp Client... This might take a few moments.');
 client.initialize();

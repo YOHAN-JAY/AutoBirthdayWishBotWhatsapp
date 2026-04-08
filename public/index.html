@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoBirthdayWishBot Dashboard</title>
+    <!-- Modern typography from Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chart JS -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="blob1"></div>
+    <div id="blob2"></div>
+    <div id="blob3"></div>
+
+    <div class="glass-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="logo">
+                <h2>BotDashboard</h2>
+            </div>
+            <ul class="nav-links">
+                <li class="active" data-tab="dashboard">
+                    <span>📱 Dashboard</span>
+                </li>
+                <li data-tab="quiz">
+                    <span>🎯 Quiz Studio</span>
+                </li>
+                <li data-tab="announcements">
+                    <span>📣 Announcements</span>
+                </li>
+                <li data-tab="birthdays">
+                    <span>🎂 Manage Birthdays</span>
+                </li>
+            </ul>
+            <div class="connection-status">
+                <div class="status-indicator" id="statusDot"></div>
+                <span id="statusText">Connecting...</span>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="content">
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="tab-content active">
+                <header>
+                    <h1>Overview</h1>
+                    <p>Monitor your bot's system status and connection.</p>
+                </header>
+
+                <!-- QR Code View -->
+                <div id="qr-container" class="card qr-card hidden">
+                    <h3>WhatsApp Login Required</h3>
+                    <p>Scan this QR code with your WhatsApp app to connect.</p>
+                    <div class="qr-box">
+                        <img id="qrcode" src="" alt="QR Code">
+                    </div>
+                </div>
+
+                <!-- System Stats -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-icon">🔄</span>
+                        <h3>Bot Uptime</h3>
+                        <p id="uptime">0h 0m</p>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">💾</span>
+                        <h3>RAM Usage</h3>
+                        <p id="ramUsage">0 MB / 0 MB</p>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">💻</span>
+                        <h3>Node.js</h3>
+                        <p id="nodeVersion">Loading...</p>
+                    </div>
+                </div>
+
+                <!-- Charts Widget -->
+                <div class="charts-grid">
+                    <div class="card">
+                        <h3>Birthdays by Month</h3>
+                        <div class="chart-container">
+                            <canvas id="monthChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>Gender Split</h3>
+                        <div class="chart-container" style="display:flex; justify-content:center;">
+                            <canvas id="genderChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upcoming Reminders Widget -->
+                <div class="card" style="margin-top: 10px;">
+                    <h3>Upcoming Birthdays</h3>
+                    <p style="color: var(--text-muted); margin-bottom: 10px;">The bot checks this list daily at 5:00 AM.</p>
+                    <ul class="reminders-list" id="remindersList">
+                        <li>Loading reminders...</li>
+                    </ul>
+                </div>
+
+                <!-- Group Roster Widget -->
+                <div class="card" style="margin-top: 30px;">
+                    <h3>Group Members</h3>
+                    <p style="color: var(--text-muted); margin-bottom: 20px;">Displays members. <span style="color:var(--success)">Online</span> indicator updates on typing activity.</p>
+                    <div class="roster-container" id="rosterContainer">
+                        <div style="padding: 20px; font-weight: 600; color:var(--text-muted);">Fetching members...</div>
+                    </div>
+                </div>
+
+                <!-- Session Management -->
+                <div class="card" style="margin-top: 30px;">
+                    <h3>Session Management</h3>
+                    <p style="color: var(--text-muted); margin-bottom: 20px;">Securely wipe the current WhatsApp session to login with a new phone.</p>
+                    <button id="logoutBtn" class="btn primary" style="background: linear-gradient(135deg, var(--danger), #f43f5e); box-shadow: 0 10px 20px -5px rgba(239, 68, 68, 0.4);">
+                        Log Out Device
+                    </button>
+                    <div id="logoutFeedback" class="form-feedback"></div>
+                </div>
+            </section>
+
+            <!-- Quiz Studio Section -->
+            <section id="quiz" class="tab-content">
+                <header>
+                    <h1>Quiz Studio</h1>
+                    <p>Create and broadcast live interactive quizzes.</p>
+                </header>
+                <div class="card form-card">
+                    <form id="quizForm">
+                        <div class="form-group">
+                            <label>Question</label>
+                            <input type="text" id="quizQuestion" placeholder="e.g. What does API stand for?" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Countdown Limit (Seconds)</label>
+                            <input type="number" id="quizTimer" placeholder="30" min="10" max="300" value="30">
+                        </div>
+                        <div class="form-group options-group">
+                            <label>Options (Prefix the correct one with *)</label>
+                            <input type="text" class="opt-input" placeholder="Option 1" required>
+                            <input type="text" class="opt-input" placeholder="*Correct Option" required>
+                            <input type="text" class="opt-input" placeholder="Option 3">
+                            <input type="text" class="opt-input" placeholder="Option 4">
+                        </div>
+                        <button type="submit" class="btn primary">Launch Quiz</button>
+                    </form>
+                    <div id="quizResult" class="form-feedback"></div>
+                </div>
+            </section>
+
+            <!-- Announcements Section -->
+            <section id="announcements" class="tab-content">
+                <header>
+                    <h1>Announcements</h1>
+                    <p>Broadcast messages directly to the main group.</p>
+                </header>
+                <div class="card form-card">
+                    <form id="announceForm">
+                        <div class="form-group">
+                            <label>Message Content</label>
+                            <textarea id="announceText" rows="5" placeholder="Type your broadcast message here..." required></textarea>
+                        </div>
+                        <button type="submit" class="btn primary">Send Broadcast</button>
+                    </form>
+                    <div id="announceResult" class="form-feedback"></div>
+                </div>
+            </section>
+
+            <!-- Birthday Management Section -->
+            <section id="birthdays" class="tab-content">
+                <header>
+                    <h1>Manage Birthdays</h1>
+                    <p>Database entries for the auto-wishing logic.</p>
+                </header>
+                
+                <div class="card">
+                    <form id="addBirthdayForm" class="add-birthday-form">
+                        <div>
+                            <label>Year</label>
+                            <input type="number" id="bdYear" placeholder="2003" required>
+                        </div>
+                        <div>
+                            <label>Month</label>
+                            <select id="bdMonth" required>
+                                <option value="1">1 - Jan</option>
+                                <option value="2">2 - Feb</option>
+                                <option value="3">3 - Mar</option>
+                                <option value="4">4 - Apr</option>
+                                <option value="5">5 - May</option>
+                                <option value="6">6 - Jun</option>
+                                <option value="7">7 - Jul</option>
+                                <option value="8">8 - Aug</option>
+                                <option value="9">9 - Sep</option>
+                                <option value="10">10 - Oct</option>
+                                <option value="11">11 - Nov</option>
+                                <option value="12">12 - Dec</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Day</label>
+                            <input type="number" id="bdDay" min="1" max="31" placeholder="15" required>
+                        </div>
+                        <div>
+                            <label>Gender</label>
+                            <select id="bdGender" required>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Age</label>
+                            <input type="number" id="bdAge" placeholder="To turn" required>
+                        </div>
+                        <div>
+                            <label>Name</label>
+                            <input type="text" id="bdName" placeholder="Calling Name" required>
+                        </div>
+                        <div>
+                            <button type="submit" class="btn primary" style="width: 100%;">Add Person</button>
+                        </div>
+                    </form>
+                    <div id="bdFormFeedback" class="form-feedback" style="margin-bottom: 20px;"></div>
+
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Date</th>
+                                    <th>Age</th>
+                                    <th>Gender</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="birthdaysTableBody">
+                                <tr><td colspan="5" style="text-align: center;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Include Socket.io client -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

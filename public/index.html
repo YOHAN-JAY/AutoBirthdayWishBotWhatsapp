@@ -36,6 +36,9 @@
                 <li data-tab="birthdays">
                     <span>🎂 Manage Birthdays</span>
                 </li>
+                <li data-tab="permissions">
+                    <span>🔐 Manage Permissions</span>
+                </li>
             </ul>
             <div class="connection-status">
                 <div class="status-indicator" id="statusDot"></div>
@@ -240,6 +243,41 @@
                             </thead>
                             <tbody id="birthdaysTableBody">
                                 <tr><td colspan="5" style="text-align: center;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Permissions Management Section -->
+            <section id="permissions" class="tab-content">
+                <header>
+                    <h1>Security & Permissions</h1>
+                    <p>Grant bot command access to users who aren't group admins.</p>
+                </header>
+                
+                <div class="card">
+                    <form id="addPermissionForm" style="display: flex; gap: 15px; align-items: end; margin-bottom: 30px;">
+                        <div style="flex-grow: 1;">
+                            <label style="display:block; margin-bottom:8px; font-weight:600;">Phone Number (with Country Code)</label>
+                            <input type="text" id="permNumber" placeholder="e.g. 94712345678" required>
+                        </div>
+                        <div>
+                            <button type="submit" class="btn primary">Authorize</button>
+                        </div>
+                    </form>
+                    <div id="permFormFeedback" class="form-feedback" style="margin-bottom: 20px;"></div>
+
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Authorized Phone Number</th>
+                                    <th style="width: 100px;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="permissionsTableBody">
+                                <tr><td colspan="2" style="text-align: center;">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>

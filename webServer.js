@@ -148,6 +148,35 @@ function startWebServer(client) {
         }
     });
 
+    // --- Permissions Endpoints ---
+    const permsFilePath = path.join(__dirname, 'permissions.json');
+    app.get('/api/permissions', (req, res) => {
+        try {
+            if (!fs.existsSync(permsFilePath)) {
+                return res.json([]);
+            }
+            const data = fs.readFileSync(permsFilePath, 'utf-8');
+            res.json(JSON.parse(data));
+        } catch (e) {
+            res.json([]);
+        }
+    });
+
+    app.post('/api/permissions', (req, res) => {
+        const { allowedNumbers } = req.body;
+        if (!Array.isArray(allowedNumbers)) {
+            return res.status(400).json({ error: 'Invalid data format' });
+        }
+        try {
+            fs.writeFileSync(permsFilePath, JSON.stringify(allowedNumbers, null, 2), 'utf-8');
+            res.json({ success: true });
+        } catch(e) {
+            console.error('Failed to save permissions:', e);
+            res.status(500).json({ error: 'Failed to save to config.' });
+        }
+    });
+    // ----------------------------
+
     app.get('/api/group_members', async (req, res) => {
         if (!isClientReady) return res.json([]);
         

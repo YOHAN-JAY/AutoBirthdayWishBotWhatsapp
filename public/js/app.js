@@ -413,3 +413,101 @@ function renderCharts() {
 fetchReminders();
 fetchBirthdays();
 fetchGroupMembers();
+fetchPermissions();
+
+// --- Permissions Management ---
+let permissionsData = [];
+
+async function fetchPermissions() {
+    const tbody = document.getElementById('permissionsTableBody');
+    try {
+        const res = await fetch('/api/permissions');
+        permissionsData = await res.json();
+        renderPermissionsTable();
+    } catch(e) {
+        tbody.innerHTML = `<tr><td colspan="2" style="color:var(--danger);text-align:center;">Failed to load data.</td></tr>`;
+    }
+}
+
+function renderPermissionsTable() {
+    const tbody = document.getElementById('permissionsTableBody');
+    tbody.innerHTML = '';
+    
+    if(permissionsData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="2" style="text-align:center;">No custom permissions found.</td></tr>`;
+        return;
+    }
+    
+    permissionsData.forEach((num, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="font-weight:600;">+${num.replace(/[^0-9]/g, '')}</td>
+            <td><button class="btn danger" onclick="deletePermission(${index})">Revoke</button></td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+const addPermissionForm = document.getElementById('addPermissionForm');
+const permFormFeedback = document.getElementById('permFormFeedback');
+
+addPermissionForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    permFormFeedback.style.display = 'none';
+    
+    let rawNum = document.getElementById('permNumber').value.trim();
+    const cleanNum = rawNum.replace(/[^0-9]/g, '');
+    if (!cleanNum) return;
+    
+    if (permissionsData.includes(cleanNum)) {
+        permFormFeedback.className = 'form-feedback error';
+        permFormFeedback.innerHTML = 'Number already authorized.';
+        permFormFeedback.style.display = 'block';
+        return;
+    }
+    
+    permissionsData.push(cleanNum);
+    await savePermissions();
+    addPermissionForm.reset();
+});
+
+window.deletePermission = async function(index) {
+    if(confirm(`Revoke bot access for +${permissionsData[index]}?`)) {
+        permissionsData.splice(index, 1);
+        await savePermissions();
+    }
+};
+
+async function savePermissions() {
+    const btn = addPermissionForm.querySelector('button');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    
+    try {
+        const response = await fetch('/api/permissions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ allowedNumbers: permissionsData })
+        });
+        const data = await response.json();
+        
+        if(data.success) {
+            renderPermissionsTable();
+            permFormFeedback.className = 'form-feedback success';
+            permFormFeedback.innerHTML = 'Security configuration updated!';
+            permFormFeedback.style.display = 'block';
+            setTimeout(() => permFormFeedback.style.display = 'none', 3000);
+        } else {
+            permFormFeedback.className = 'form-feedback error';
+            permFormFeedback.innerHTML = data.error || 'Failed to update configuration.';
+            permFormFeedback.style.display = 'block';
+        }
+    } catch(e) {
+        permFormFeedback.className = 'form-feedback error';
+        permFormFeedback.innerHTML = 'Network error saving config.';
+        permFormFeedback.style.display = 'block';
+    }
+    
+    btn.disabled = false;
+    btn.textContent = 'Authorize';
+}

@@ -186,19 +186,35 @@ client.on('message_create', async (msg) => {
         const allowedGroupId = '120363388371926819@g.us';
         const myChatId = client.info.wid._serialized;
 
-        if (chat.id._serialized !== allowedGroupId && chat.id._serialized !== myChatId) {
-            return msg.reply('❌ The `/quiz` command is not allowed in this chat!');
+        const senderId = msg.author || msg.from;
+        const isBotOwner = msg.fromMe || senderId === myChatId;
+        
+        let isMainGroupAdmin = false;
+        try {
+            const mainGroup = await client.getChatById(allowedGroupId);
+            const participant = mainGroup.participants.find(p => p.id._serialized === senderId);
+            if (participant && (participant.isAdmin || participant.isSuperAdmin)) {
+                isMainGroupAdmin = true;
+            }
+        } catch (e) {
+            console.error('Could not verify main group admin status', e);
         }
 
-        if (chat.isGroup) {
-            const senderId = msg.author || msg.from;
-            const participant = chat.participants.find(p => p.id._serialized === senderId);
-            const isBotOwner = msg.fromMe;
-            const isAdmin = participant && (participant.isAdmin || participant.isSuperAdmin);
-
-            if (!isBotOwner && !isAdmin) {
-                return msg.reply('❌ Sorry, only group admins can use the `/quiz` command!');
+        // --- Custom Permissions DB Fallback ---
+        let isCustomAllowed = false;
+        try {
+            const permsPath = path.join(__dirname, 'permissions.json');
+            if (fs.existsSync(permsPath)) {
+                const arr = JSON.parse(fs.readFileSync(permsPath, 'utf-8'));
+                const senderNum = senderId.split('@')[0];
+                if (arr.some(num => num.replace(/[^0-9]/g, '') === senderNum)) {
+                    isCustomAllowed = true;
+                }
             }
+        } catch(e) {}
+
+        if (!isBotOwner && !isMainGroupAdmin && !isCustomAllowed) {
+            return msg.reply('❌ Sorry, you do not have permission to use the `/quiz` command!');
         }
 
         if (activeQuiz) {

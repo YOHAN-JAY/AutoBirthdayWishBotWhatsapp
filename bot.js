@@ -226,7 +226,8 @@ client.on('message_create', async (msg) => {
         }
 
         if (!isBotOwner && !isLocalGroupAdmin && !isMainGroupAdmin && !isCustomAllowed) {
-            return msg.reply('❌ Sorry, you do not have permission to use the `/quiz` command!');
+            const senderNum = senderId.split('@')[0];
+            return msg.reply(`❌ *Permission Denied*\n\nYou do not have permission to use the \`/quiz\` command!\n\n_System caught your number as: ${senderNum}_\n_To manually whitelist yourself, please add exactly **${senderNum}** into the Security Tab on the Web Dashboard!_`);
         }
 
         if (activeQuiz) {
@@ -410,7 +411,8 @@ client.on('message_create', async (msg) => {
         }
 
         if (!isBotOwner && !isLocalGroupAdmin && !isMainGroupAdmin && !isCustomAllowed) {
-            return msg.reply('❌ Sorry, you do not have permission to use the `/wish` command!');
+            const senderNum = senderId.split('@')[0];
+            return msg.reply(`❌ *Permission Denied*\n\nYou do not have permission to use the \`/wish\` command!\n\n_System caught your number as: ${senderNum}_\n_To manually whitelist yourself, please add exactly **${senderNum}** into the Security Tab on the Web Dashboard!_`);
         }
         // ---------------------------------------
 

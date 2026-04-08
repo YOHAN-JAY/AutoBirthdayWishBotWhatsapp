@@ -260,9 +260,13 @@ client.on('message_create', async (msg) => {
              return msg.reply('❌ WhatsApp supports a maximum of 12 options in a poll/quiz.');
         }
 
+        // Logic: If formulating in a group, drop the quiz in that precise group.
+        // If formulating privately in a DM, drop the quiz into the Main Group.
+        const targetChatId = chat.isGroup ? chat.id._serialized : allowedGroupId;
+
         try {
             const poll = new Poll(question, options);
-            const pollMsg = await client.sendMessage(allowedGroupId, poll);
+            const pollMsg = await client.sendMessage(targetChatId, poll);
             
             if (chat.id._serialized === myChatId) {
                 await msg.reply('✅ Quiz successfully sent to the group!');
@@ -281,7 +285,7 @@ client.on('message_create', async (msg) => {
             
             let countdownMsg = null;
             try {
-                countdownMsg = await client.sendMessage(allowedGroupId, `⏳ Countdown: ${secondsLeft}s left`);
+                countdownMsg = await client.sendMessage(targetChatId, `⏳ Countdown: ${secondsLeft}s left`);
             } catch (e) {}
 
             const timer = setInterval(async () => {
@@ -314,7 +318,8 @@ client.on('message_create', async (msg) => {
                     try {
                         let targetPollMsg = pollMsg;
                         try {
-                            const messages = await chat.fetchMessages({ limit: 10 });
+                            const chatObj = await client.getChatById(targetChatId);
+                            const messages = await chatObj.fetchMessages({ limit: 10 });
                             const fetchedPoll = messages.find(m => m.id._serialized === pollMsg.id._serialized);
                             if (fetchedPoll) targetPollMsg = fetchedPoll;
                         } catch (err) {}
@@ -331,7 +336,7 @@ client.on('message_create', async (msg) => {
                     const mentions = activeQuiz.firstCorrectVoter ? [activeQuiz.firstCorrectVoter] : [];
                     
                     try {
-                        await client.sendMessage(allowedGroupId, resultText, { mentions });
+                        await client.sendMessage(targetChatId, resultText, { mentions });
                     } catch(e) { }
 
                     activeQuiz = null; // Clear state
@@ -350,28 +355,38 @@ client.on('message_create', async (msg) => {
 
         // --- Authorization & Allowed Chats Check ---
         const chat = await msg.getChat();
-        
-        // Restrict bot to the specific SE Batch 06 Group AND your self-chat
         const allowedGroupId = '120363388371926819@g.us';
         const myChatId = client.info.wid._serialized;
+
+        const senderId = msg.author || msg.from;
+        const isBotOwner = msg.fromMe || senderId === myChatId;
         
-        if (chat.id._serialized !== allowedGroupId && chat.id._serialized !== myChatId) {
-            return msg.reply('❌ The `/wish` command is not allowed in this chat!');
+        let isMainGroupAdmin = false;
+        try {
+            const mainGroup = await client.getChatById(allowedGroupId);
+            const participant = mainGroup.participants.find(p => p.id._serialized === senderId);
+            if (participant && (participant.isAdmin || participant.isSuperAdmin)) {
+                isMainGroupAdmin = true;
+            }
+        } catch (e) {
+            console.error('Could not verify main group admin status', e);
         }
 
-        if (chat.isGroup) {
-            // In groups, msg.author identifies the specific user who sent the message
-            const senderId = msg.author || msg.from;
-            // Locate the user in the group participant list
-            const participant = chat.participants.find(p => p.id._serialized === senderId);
-
-            // Allow execution if it's the bot owner running it OR if the participant is a group admin/superadmin
-            const isBotOwner = msg.fromMe;
-            const isAdmin = participant && (participant.isAdmin || participant.isSuperAdmin);
-
-            if (!isBotOwner && !isAdmin) {
-                return msg.reply('❌ Sorry, only group admins can use the `/wish` command!');
+        // --- Custom Permissions DB Fallback ---
+        let isCustomAllowed = false;
+        try {
+            const permsPath = path.join(__dirname, 'permissions.json');
+            if (fs.existsSync(permsPath)) {
+                const arr = JSON.parse(fs.readFileSync(permsPath, 'utf-8'));
+                const senderNum = senderId.split('@')[0];
+                if (arr.some(num => num.replace(/[^0-9]/g, '') === senderNum)) {
+                    isCustomAllowed = true;
+                }
             }
+        } catch(e) {}
+
+        if (!isBotOwner && !isMainGroupAdmin && !isCustomAllowed) {
+            return msg.reply('❌ Sorry, you do not have permission to use the `/wish` command!');
         }
         // ---------------------------------------
 

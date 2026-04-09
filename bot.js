@@ -301,7 +301,51 @@ client.on('message_create', async (msg) => {
                 countdownMsg = await client.sendMessage(targetChatId, `⏳ Countdown: ${secondsLeft}s left`);
             } catch (e) {}
 
-            const timer = setInterval(async () => {
+            let timer;
+
+            const finishQuiz = async (stoppedEarly = false) => {
+                if (timer) clearInterval(timer);
+
+                if (countdownMsg) {
+                    try {
+                        await countdownMsg.delete(true);
+                    } catch (e) {}
+                }
+
+                // Try to delete the poll for everyone
+                try {
+                    let targetPollMsg = pollMsg;
+                    try {
+                        const chatObj = await client.getChatById(targetChatId);
+                        const messages = await chatObj.fetchMessages({ limit: 10 });
+                        const fetchedPoll = messages.find(m => m.id._serialized === pollMsg.id._serialized);
+                        if (fetchedPoll) targetPollMsg = fetchedPoll;
+                    } catch (err) {}
+                    
+                    await targetPollMsg.delete(true);
+                } catch (e) {
+                    console.error('Failed to delete poll message:', e);
+                }
+
+                if (!activeQuiz) return;
+
+                const winnerText = activeQuiz.firstCorrectVoter ? `@${activeQuiz.firstCorrectVoter.split('@')[0]} answered it correctly first!` : `Nobody got it right this time! 😢`;
+                
+                const headerText = stoppedEarly ? `🛑 *Quiz Stopped Early!*` : `⏳ *Time's Up!*`;
+                const resultText = `${headerText}\n\n_${question}_\n\nThe correct answer is: *${activeQuiz.correctAnswerText}*\n\n🎉 ${winnerText}`;
+                
+                const mentions = activeQuiz.firstCorrectVoter ? [activeQuiz.firstCorrectVoter] : [];
+                
+                try {
+                    await client.sendMessage(targetChatId, resultText, { mentions });
+                } catch(e) { }
+
+                activeQuiz = null; // Clear state
+            };
+
+            activeQuiz.finishQuiz = finishQuiz;
+
+            timer = setInterval(async () => {
                 secondsLeft--;
 
                 if (countdownMsg && typeof countdownMsg.edit === 'function') {
@@ -319,40 +363,7 @@ client.on('message_create', async (msg) => {
                 }
 
                 if (secondsLeft === 0) {
-                    clearInterval(timer);
-
-                    if (countdownMsg) {
-                        try {
-                            await countdownMsg.delete(true);
-                        } catch (e) {}
-                    }
-
-                    // Try to delete the poll for everyone
-                    try {
-                        let targetPollMsg = pollMsg;
-                        try {
-                            const chatObj = await client.getChatById(targetChatId);
-                            const messages = await chatObj.fetchMessages({ limit: 10 });
-                            const fetchedPoll = messages.find(m => m.id._serialized === pollMsg.id._serialized);
-                            if (fetchedPoll) targetPollMsg = fetchedPoll;
-                        } catch (err) {}
-                        
-                        await targetPollMsg.delete(true);
-                    } catch (e) {
-                        console.error('Failed to delete poll message:', e);
-                    }
-
-                    const winnerText = activeQuiz.firstCorrectVoter ? `@${activeQuiz.firstCorrectVoter.split('@')[0]} answered it correctly first!` : `Nobody got it right this time! 😢`;
-                    
-                    const resultText = `⏳ *Time's Up!*\n\n_${question}_\n\nThe correct answer is: *${activeQuiz.correctAnswerText}*\n\n🎉 ${winnerText}`;
-                    
-                    const mentions = activeQuiz.firstCorrectVoter ? [activeQuiz.firstCorrectVoter] : [];
-                    
-                    try {
-                        await client.sendMessage(targetChatId, resultText, { mentions });
-                    } catch(e) { }
-
-                    activeQuiz = null; // Clear state
+                    await finishQuiz();
                 }
             }, 1000);
 
@@ -361,6 +372,66 @@ client.on('message_create', async (msg) => {
             await msg.reply('❌ Failed to create the quiz. Double check your format.');
             activeQuiz = null;
         }
+    }
+    // ---------------------------------
+
+    // --- Command: Stop Quiz ---
+    if (content.toLowerCase() === '/stopquiz' || content.toLowerCase() === '/endquiz') {
+        const chat = await msg.getChat();
+        const allowedGroupId = '120363388371926819@g.us';
+        const myChatId = client.info.wid._serialized;
+
+        const senderId = msg.author || msg.from;
+        const isBotOwner = msg.fromMe || senderId === myChatId;
+        
+        let isLocalGroupAdmin = false;
+        if (chat.isGroup) {
+            const localParticipant = chat.participants.find(p => p.id._serialized === senderId);
+            if (localParticipant && (localParticipant.isAdmin || localParticipant.isSuperAdmin)) {
+                isLocalGroupAdmin = true;
+            }
+        }
+
+        let isMainGroupAdmin = false;
+        if (!isLocalGroupAdmin) {
+            try {
+                const mainGroup = await client.getChatById(allowedGroupId);
+                const participant = mainGroup.participants.find(p => p.id._serialized === senderId);
+                if (participant && (participant.isAdmin || participant.isSuperAdmin)) {
+                    isMainGroupAdmin = true;
+                }
+            } catch (e) {
+                console.error('Could not verify main group admin status', e);
+            }
+        }
+
+        // --- Custom Permissions DB Fallback ---
+        let isCustomAllowed = false;
+        if (!isLocalGroupAdmin && !isMainGroupAdmin) {
+            try {
+                const permsPath = path.join(__dirname, 'permissions.json');
+                if (fs.existsSync(permsPath)) {
+                    const arr = JSON.parse(fs.readFileSync(permsPath, 'utf-8'));
+                    const senderNum = senderId.split('@')[0];
+                    if (arr.some(num => num.replace(/[^0-9]/g, '') === senderNum)) {
+                        isCustomAllowed = true;
+                    }
+                }
+            } catch(e) {}
+        }
+
+        if (!isBotOwner && !isLocalGroupAdmin && !isMainGroupAdmin && !isCustomAllowed) {
+            const senderNum = senderId.split('@')[0];
+            return msg.reply(`❌ *Permission Denied*\n\nYou do not have permission to use the \`/stopquiz\` command!\n\n_System caught your number as: ${senderNum}_\n_To manually whitelist yourself, please add exactly **${senderNum}** into the Security Tab on the Web Dashboard!_`);
+        }
+
+        if (!activeQuiz || typeof activeQuiz.finishQuiz !== 'function') {
+            return msg.reply('❌ No quiz is currently running!');
+        }
+
+        await msg.reply('🛑 Stopping the quiz now...');
+        await activeQuiz.finishQuiz(true);
+        return;
     }
     // ---------------------------------
 

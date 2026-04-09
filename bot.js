@@ -346,23 +346,29 @@ client.on('message_create', async (msg) => {
             activeQuiz.finishQuiz = finishQuiz;
 
             timer = setInterval(async () => {
+                if (secondsLeft <= 0) {
+                    clearInterval(timer);
+                    return;
+                }
+
                 secondsLeft--;
+                const currentSecondsLeft = secondsLeft;
+
+                if (currentSecondsLeft === 0) {
+                    clearInterval(timer);
+                }
 
                 if (countdownMsg && typeof countdownMsg.edit === 'function') {
-                    try {
-                        await countdownMsg.edit(`⏳ Countdown: ${secondsLeft}s left`);
-                    } catch (e) {}
+                    // Don't await the edit, so we don't delay the next ticks
+                    countdownMsg.edit(`⏳ Countdown: ${currentSecondsLeft}s left`).catch(() => {});
                 }
 
-                if (secondsLeft <= 10 && secondsLeft > 0) {
-                    try {
-                        await pollMsg.react(numberEmojis[secondsLeft]);
-                    } catch (e) {
-                         // ignore reaction errors
-                    }
+                if (currentSecondsLeft <= 10 && currentSecondsLeft > 0) {
+                    // Don't await the reaction
+                    pollMsg.react(numberEmojis[currentSecondsLeft]).catch(() => {});
                 }
 
-                if (secondsLeft === 0) {
+                if (currentSecondsLeft === 0) {
                     await finishQuiz();
                 }
             }, 1000);
